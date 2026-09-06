@@ -24,8 +24,8 @@ class Settings(BaseSettings):
 
     # Server settings
     HOST: str = "0.0.0.0"
-    PORT: int = 8000
-    DEBUG: bool = True
+    PORT: int = int(os.getenv("PORT", "8000"))
+    DEBUG: bool = False
 
     # CORS settings
     ALLOWED_ORIGINS: Union[List[str], str] = ["*"]
