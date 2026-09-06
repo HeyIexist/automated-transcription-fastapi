@@ -1,0 +1,35 @@
+# Python Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Pytest / Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDEs & OS
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+.DS_Store
+
+# Temporary audio files
+*.wav
+*.mp3
+*.m4a
+*.ogg
+*.flac
+temp_*
