@@ -157,12 +157,23 @@ class MeetingService:
                 bedrock_res = await bedrock_service.generate_chat(bedrock_req)
                 raw_content = bedrock_res.message.content
             except Exception as e:
-                if provider == "auto":
-                    raw_content = await self._call_ollama_fallback(model, user_prompt)
+                err_msg = str(e)
+                if "credentials" in err_msg.lower() or provider == "auto":
+                    try:
+                        raw_content = await self._call_ollama_fallback(model, user_prompt)
+                    except Exception:
+                        raise HTTPException(
+                            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail=(
+                                "AWS Bedrock credentials missing or invalid. "
+                                "Please add AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_REGION to backend/.env, "
+                                "or ensure local Ollama is running."
+                            )
+                        )
                 else:
                     raise HTTPException(
                         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail=f"AWS Bedrock LLM engine error: {str(e)}"
+                        detail=f"AWS Bedrock LLM engine error: {err_msg}"
                     )
         else:
             raw_content = await self._call_ollama_fallback(model, user_prompt)

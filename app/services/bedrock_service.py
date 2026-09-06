@@ -44,19 +44,15 @@ class BedrockService:
         self._client = None
 
     def _get_client(self):
-        if self._client is not None:
-            return self._client
-
-        kwargs: Dict[str, Any] = {"region_name": self.region}
+        kwargs: Dict[str, Any] = {"region_name": settings.AWS_REGION}
         if settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY:
-            kwargs["aws_access_key_id"] = settings.AWS_ACCESS_KEY_ID
-            kwargs["aws_secret_access_key"] = settings.AWS_SECRET_ACCESS_KEY
+            kwargs["aws_access_key_id"] = settings.AWS_ACCESS_KEY_ID.strip()
+            kwargs["aws_secret_access_key"] = settings.AWS_SECRET_ACCESS_KEY.strip()
             if settings.AWS_SESSION_TOKEN:
-                kwargs["aws_session_token"] = settings.AWS_SESSION_TOKEN
+                kwargs["aws_session_token"] = settings.AWS_SESSION_TOKEN.strip()
 
         try:
-            self._client = boto3.client("bedrock-runtime", **kwargs)
-            return self._client
+            return boto3.client("bedrock-runtime", **kwargs)
         except Exception as e:
             raise RuntimeError(f"Failed to initialize AWS Bedrock client: {str(e)}")
 
