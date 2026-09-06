@@ -8,7 +8,17 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api"
 
-    # Ollama settings
+    # LLM Provider settings: "bedrock", "ollama", or "auto"
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "bedrock")
+
+    # AWS Bedrock settings
+    AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
+    AWS_ACCESS_KEY_ID: str = os.getenv("AWS_ACCESS_KEY_ID", "")
+    AWS_SECRET_ACCESS_KEY: str = os.getenv("AWS_SECRET_ACCESS_KEY", "")
+    AWS_SESSION_TOKEN: str = os.getenv("AWS_SESSION_TOKEN", "")
+    BEDROCK_MODEL_ID: str = os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-3-5-sonnet-20240620-v1:0")
+
+    # Ollama settings (fallback)
     OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
     DEFAULT_MODEL: str = os.getenv("DEFAULT_MODEL", "qwen2.5:3b")
 

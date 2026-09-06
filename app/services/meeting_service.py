@@ -12,6 +12,8 @@ from app.schemas.meeting import (
     ActionItem,
     SampleTranscript
 )
+from app.schemas.chat import ChatCompletionRequest, ChatMessage
+from app.services.bedrock_service import bedrock_service
 
 SYSTEM_EXTRACTION_PROMPT = (
     "You are Meeting Intelligence AI, an advanced AI assistant specialized in analyzing meeting transcripts.\n"
@@ -97,7 +99,7 @@ class MeetingService:
         self.default_model = default_model
 
     def validate_transcript(self, transcript: str) -> None:
-        """Edge Case 1: Reject empty or whitespace-only transcripts immediately."""
+        """Reject empty or whitespace-only transcripts immediately."""
         if not transcript or not transcript.strip():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -109,17 +111,7 @@ class MeetingService:
                 detail="Transcript input is too short. Please provide a full meeting transcript."
             )
 
-    async def extract_intelligence(self, request: MeetingExtractionRequest) -> MeetingExtractionResponse:
-        # Step 1: Input Validation (Edge Case handling)
-        self.validate_transcript(request.transcript)
-
-        transcript_text = request.transcript.strip()
-        words = len(transcript_text.split())
-        model = request.model or self.default_model
-
-        # Step 2: Prepare LLM Prompt
-        user_prompt = f"Analyze the following meeting transcript:\n\n---\n{transcript_text}\n---"
-
+    async def _call_ollama_fallback(self, model: str, user_prompt: str) -> str:
         payload = {
             "model": model,
             "messages": [
@@ -127,30 +119,58 @@ class MeetingService:
                 {"role": "user", "content": user_prompt}
             ],
             "stream": False,
-            "options": {
-                "temperature": 0.1,  # Low temperature for strict compliance
-                "top_p": 0.9,
-            }
+            "options": {"temperature": 0.1, "top_p": 0.9}
         }
-
-        # Step 3: Execute LLM Call
-        raw_content = ""
         try:
             async with httpx.AsyncClient(timeout=120.0) as client:
                 res = await client.post(f"{self.base_url}/api/chat", json=payload)
                 res.raise_for_status()
                 data = res.json()
-                raw_content = data.get("message", {}).get("content", "")
+                return data.get("message", {}).get("content", "")
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error calling LLM engine for meeting extraction: {str(e)}"
+                detail=f"Error calling local LLM fallback: {str(e)}"
             )
 
-        # Step 4: Parse Structured JSON Response
+    async def extract_intelligence(self, request: MeetingExtractionRequest) -> MeetingExtractionResponse:
+        self.validate_transcript(request.transcript)
+
+        transcript_text = request.transcript.strip()
+        words = len(transcript_text.split())
+        model = request.model or self.default_model
+
+        user_prompt = f"Analyze the following meeting transcript:\n\n---\n{transcript_text}\n---"
+        raw_content = ""
+        provider = settings.LLM_PROVIDER.lower()
+
+        # Step: Execute LLM Call (AWS Bedrock or Ollama fallback)
+        if provider == "bedrock" or (provider == "auto" and settings.AWS_ACCESS_KEY_ID):
+            try:
+                bedrock_req = ChatCompletionRequest(
+                    model=request.model or settings.BEDROCK_MODEL_ID,
+                    messages=[ChatMessage(role="user", content=user_prompt)],
+                    system_prompt=SYSTEM_EXTRACTION_PROMPT,
+                    temperature=0.1,
+                    top_p=0.9
+                )
+                bedrock_res = await bedrock_service.generate_chat(bedrock_req)
+                raw_content = bedrock_res.message.content
+            except Exception as e:
+                if provider == "auto":
+                    raw_content = await self._call_ollama_fallback(model, user_prompt)
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail=f"AWS Bedrock LLM engine error: {str(e)}"
+                    )
+        else:
+            raw_content = await self._call_ollama_fallback(model, user_prompt)
+
+        # Parse Structured JSON Response
         parsed = self._parse_json_response(raw_content)
 
-        # Step 5: Construct Response Object
+        # Construct Response Object
         action_items = []
         for item in parsed.get("action_items", []):
             if isinstance(item, dict) and item.get("task"):
@@ -185,9 +205,8 @@ class MeetingService:
         )
 
     def _parse_json_response(self, raw_text: str) -> Dict[str, Any]:
-        """Robustly extracts JSON from raw LLM output, handling markdown blocks."""
+        """Extracts JSON from raw LLM output, handling markdown blocks."""
         cleaned = raw_text.strip()
-        # Remove ```json and ``` codeblock markers if present
         if "```" in cleaned:
             match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, re.DOTALL)
             if match:
@@ -199,7 +218,6 @@ class MeetingService:
         try:
             return json.loads(cleaned)
         except json.JSONDecodeError:
-            # Secondary regex extraction for root JSON object
             match = re.search(r"\{.*\}", cleaned, re.DOTALL)
             if match:
                 try:
@@ -207,7 +225,6 @@ class MeetingService:
                 except json.JSONDecodeError:
                     pass
 
-        # Fallback dictionary if JSON parsing fails
         return {
             "summary": raw_text[:300] if raw_text else "Extraction completed.",
             "key_decisions": [],
