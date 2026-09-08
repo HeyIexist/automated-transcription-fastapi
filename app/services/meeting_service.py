@@ -144,26 +144,17 @@ class MeetingService:
         raw_content = ""
         provider = settings.LLM_PROVIDER.lower()
 
-        # Step: Execute LLM Call (AWS Bedrock or Ollama fallback)
-        if provider == "bedrock" or (provider == "auto" and settings.AWS_ACCESS_KEY_ID):
-            try:
-                bedrock_req = ChatCompletionRequest(
-                    model=request.model or settings.BEDROCK_MODEL_ID,
-                    messages=[ChatMessage(role="user", content=user_prompt)],
-                    system_prompt=SYSTEM_EXTRACTION_PROMPT,
-                    temperature=0.1,
-                    top_p=0.9
-                )
-                bedrock_res = await bedrock_service.generate_chat(bedrock_req)
-                raw_content = bedrock_res.message.content
-            except Exception as e:
-                err_msg = str(e)
-                print(f"[WARN] AWS Bedrock call failed ({err_msg}). Falling back to Intelligent Rule-Based Extractor.")
-                parsed_fallback = self._generate_rule_based_extraction(transcript_text)
-                raw_content = json.dumps(parsed_fallback)
+        # Step: Execute LLM Call (AWS Bedrock)
+        bedrock_req = ChatCompletionRequest(
+            model=request.model or settings.BEDROCK_MODEL_ID,
+            messages=[ChatMessage(role="user", content=user_prompt)],
+            system_prompt=SYSTEM_EXTRACTION_PROMPT,
+            temperature=0.1,
+            top_p=0.9
+        )
+        bedrock_res = await bedrock_service.generate_chat(bedrock_req)
+        raw_content = bedrock_res.message.content
 
-        else:
-            raw_content = await self._call_ollama_fallback(model, user_prompt)
 
         # Parse Structured JSON Response
         parsed = self._parse_json_response(raw_content)
