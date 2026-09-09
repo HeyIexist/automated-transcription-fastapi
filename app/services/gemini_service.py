@@ -28,7 +28,7 @@ class GeminiService:
 
         model_id = request.model or self.default_model
         if not model_id.startswith("gemini-"):
-            model_id = "gemini-2.5-flash"
+            model_id = "gemini-3.8-flash"
 
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_id}:generateContent?key={api_key}"
 

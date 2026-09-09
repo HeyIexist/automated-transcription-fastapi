@@ -13,7 +13,7 @@ class Settings(BaseSettings):
 
     # Gemini API settings
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    GEMINI_MODEL_ID: str = os.getenv("GEMINI_MODEL_ID", "gemini-2.5-flash")
+    GEMINI_MODEL_ID: str = os.getenv("GEMINI_MODEL_ID", "gemini-3.8-flash")
 
     # AWS Bedrock settings
     AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
