@@ -14,6 +14,7 @@ from app.schemas.meeting import (
 )
 from app.schemas.chat import ChatCompletionRequest, ChatMessage
 from app.services.bedrock_service import bedrock_service
+from app.services.gemini_service import gemini_service
 
 SYSTEM_EXTRACTION_PROMPT = (
     "You are Meeting Intelligence AI, an advanced AI assistant specialized in analyzing meeting transcripts.\n"
@@ -144,16 +145,41 @@ class MeetingService:
         raw_content = ""
         provider = settings.LLM_PROVIDER.lower()
 
-        # Step: Execute LLM Call (AWS Bedrock)
-        bedrock_req = ChatCompletionRequest(
-            model=request.model or settings.BEDROCK_MODEL_ID,
-            messages=[ChatMessage(role="user", content=user_prompt)],
-            system_prompt=SYSTEM_EXTRACTION_PROMPT,
-            temperature=0.1,
-            top_p=0.9
-        )
-        bedrock_res = await bedrock_service.generate_chat(bedrock_req)
-        raw_content = bedrock_res.message.content
+        # Step: Execute LLM Call (Gemini, AWS Bedrock, or Ollama)
+        if provider == "gemini" or settings.GEMINI_API_KEY:
+            try:
+                gemini_req = ChatCompletionRequest(
+                    model=request.model or settings.GEMINI_MODEL_ID,
+                    messages=[ChatMessage(role="user", content=user_prompt)],
+                    system_prompt=SYSTEM_EXTRACTION_PROMPT,
+                    temperature=0.1,
+                    top_p=0.9
+                )
+                gemini_res = await gemini_service.generate_chat(gemini_req)
+                raw_content = gemini_res.message.content
+            except Exception as e:
+                err_msg = str(e)
+                print(f"[WARN] Gemini call failed ({err_msg}). Falling back to Bedrock/Rule-Based.")
+                parsed_fallback = self._generate_rule_based_extraction(transcript_text)
+                raw_content = json.dumps(parsed_fallback)
+        elif provider == "bedrock" or (provider == "auto" and settings.AWS_ACCESS_KEY_ID):
+            try:
+                bedrock_req = ChatCompletionRequest(
+                    model=request.model or settings.BEDROCK_MODEL_ID,
+                    messages=[ChatMessage(role="user", content=user_prompt)],
+                    system_prompt=SYSTEM_EXTRACTION_PROMPT,
+                    temperature=0.1,
+                    top_p=0.9
+                )
+                bedrock_res = await bedrock_service.generate_chat(bedrock_req)
+                raw_content = bedrock_res.message.content
+            except Exception as e:
+                err_msg = str(e)
+                print(f"[WARN] AWS Bedrock call failed ({err_msg}). Falling back to Rule-Based Extractor.")
+                parsed_fallback = self._generate_rule_based_extraction(transcript_text)
+                raw_content = json.dumps(parsed_fallback)
+        else:
+            raw_content = await self._call_ollama_fallback(model, user_prompt)
 
 
         # Parse Structured JSON Response

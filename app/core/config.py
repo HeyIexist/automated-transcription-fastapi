@@ -8,8 +8,12 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api"
 
-    # LLM Provider settings: "bedrock", "ollama", or "auto"
-    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "bedrock")
+    # LLM Provider settings: "gemini", "bedrock", "ollama", or "auto"
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "gemini")
+
+    # Gemini API settings
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    GEMINI_MODEL_ID: str = os.getenv("GEMINI_MODEL_ID", "gemini-2.5-flash")
 
     # AWS Bedrock settings
     AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
